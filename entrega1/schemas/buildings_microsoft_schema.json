@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MongoDB Collection Schema: buildings_microsoft",
+  "description": "Schema for Microsoft Building Footprints dataset",
+  "bsonType": "object",
+  "required": [
+    "municipality_code",
+    "geometry",
+    "properties",
+    "metadata"
+  ],
+  "properties": {
+    "_id": {
+      "bsonType": "objectId",
+      "description": "MongoDB auto-generated unique identifier"
+    },
+    "municipality_code": {
+      "bsonType": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "Reference to municipalities.codigo_dane (foreign key)"
+    },
+    "geometry": {
+      "bsonType": "object",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon"
+          ],
+          "description": "GeoJSON geometry type (buildings are polygons)"
+        },
+        "coordinates": {
+          "bsonType": "array",
+          "description": "GeoJSON coordinates representing building footprint"
+        }
+      },
+      "description": "GeoJSON geometry of the building footprint"
+    },
+    "properties": {
+      "bsonType": "object",
+      "required": [
+        "area_m2"
+      ],
+      "properties": {
+        "area_m2": {
+          "bsonType": "double",
+          "minimum": 0,
+          "description": "Area of the building footprint in square meters"
+        },
+        "confidence": {
+          "bsonType": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence score of the building detection (0-1)"
+        },
+        "height_estimated": {
+          "bsonType": "double",
+          "minimum": 0,
+          "description": "Estimated building height in meters (optional)"
+        },
+        "capture_dates": {
+          "bsonType": "array",
+          "items": {
+            "bsonType": "string"
+          },
+          "description": "Date range when imagery was captured"
+        }
+      },
+      "description": "Properties of the building"
+    },
+    "metadata": {
+      "bsonType": "object",
+      "required": [
+        "source",
+        "load_date"
+      ],
+      "properties": {
+        "source": {
+          "bsonType": "string",
+          "enum": [
+            "Microsoft"
+          ],
+          "description": "Data source identifier"
+        },
+        "capture_date_range": {
+          "bsonType": "string",
+          "description": "Date range of source imagery (e.g., '2014-2021')"
+        },
+        "imagery_source": {
+          "bsonType": "string",
+          "enum": [
+            "Maxar",
+            "Airbus",
+            "Bing Maps",
+            "Mixed"
+          ],
+          "description": "Source of satellite imagery"
+        },
+        "load_date": {
+          "bsonType": "date",
+          "description": "Timestamp when data was loaded into MongoDB"
+        },
+        "version": {
+          "bsonType": "string",
+          "description": "Version of the Microsoft dataset"
+        },
+        "batch_id": {
+          "bsonType": "string",
+          "description": "Identifier of the loading batch"
+        }
+      },
+      "description": "Metadata about data source and loading process"
+    }
+  },
+  "indexes": [
+    {
+      "name": "geometry_2dsphere",
+      "keys": {
+        "geometry": "2dsphere"
+      },
+      "description": "Geospatial index for spatial queries ($geoWithin, $geoIntersects)"
+    },
+    {
+      "name": "municipality_code_index",
+      "keys": {
+        "municipality_code": 1
+      },
+      "description": "Index for filtering buildings by municipality"
+    },
+    {
+      "name": "municipality_area_compound",
+      "keys": {
+        "municipality_code": 1,
+        "properties.area_m2": -1
+      },
+      "description": "Compound index for municipality queries sorted by area"
+    },
+    {
+      "name": "area_index",
+      "keys": {
+        "properties.area_m2": -1
+      },
+      "description": "Index for sorting/filtering by building area"
+    }
+  ],
+  "sharding": {
+    "shard_key": {
+      "municipality_code": 1
+    },
+    "description": "Shard by municipality_code for distributed processing across PDET territories"
+  },
+  "example": {
+    "_id": {
+      "$oid": "6713a8b4f1c2d3e4a5b6c7d9"
+    },
+    "municipality_code": "05001",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -75.6050,
+            6.2450
+          ],
+          [
+            -75.6048,
+            6.2450
+          ],
+          [
+            -75.6048,
+            6.2448
+          ],
+          [
+            -75.6050,
+            6.2448
+          ],
+          [
+            -75.6050,
+            6.2450
+          ]
+        ]
+      ]
+    },
+    "properties": {
+      "area_m2": 156.8,
+      "confidence": 0.95,
+      "height_estimated": 8.5,
+      "capture_dates": [
+        "2018",
+        "2019"
+      ]
+    },
+    "metadata": {
+      "source": "Microsoft",
+      "capture_date_range": "2014-2021",
+      "imagery_source": "Maxar",
+      "load_date": {
+        "$date": "2025-11-03T14:30:00.000Z"
+      },
+      "version": "v1.0",
+      "batch_id": "MS_BATCH_001"
+    }
+  }
+}

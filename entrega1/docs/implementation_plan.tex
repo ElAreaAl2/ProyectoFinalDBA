@@ -1,0 +1,775 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Entrega 1 - Proyecto Final DBA}
+\lhead{Plan de Implementación}
+\cfoot{\thepage}
+
+\title{\textbf{Plan de Implementación NoSQL}\\
+\Large{Análisis Geoespacial de Potencial Solar en Territorios PDET}\\
+\large{Entrega 1 - Diseño de Esquema y Base de Datos}}
+
+\author{Proyecto Final - Administración de Bases de Datos\\
+Universidad de los Andes}
+
+\date{Octubre 27, 2025}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Resumen Ejecutivo}
+
+Este documento presenta el plan de implementación para el desarrollo de una solución NoSQL orientada al análisis geoespacial de potencial solar en territorios PDET (Programas de Desarrollo con Enfoque Territorial) de Colombia. El proyecto tiene como objetivo principal diseñar e implementar un flujo de trabajo reproducible para estimar el potencial energético solar mediante el análisis de superficies de techos de edificaciones.
+
+\subsection{Objetivos del Proyecto}
+\begin{itemize}[leftmargin=*]
+    \item Diseñar e implementar una base de datos NoSQL escalable para almacenar datos geoespaciales de edificaciones
+    \item Integrar y comparar dos datasets masivos: Microsoft Building Footprints (999M edificios) y Google Open Buildings (1.8B edificios)
+    \item Realizar análisis espaciales para calcular el número de edificios y área total de techos por municipio PDET
+    \item Generar un reporte técnico con recomendaciones para la UPME sobre ubicaciones óptimas para proyectos piloto de energía solar
+\end{itemize}
+
+\subsection{Alcance de la Entrega 1}
+Esta primera entrega establece los fundamentos tecnológicos del proyecto mediante:
+\begin{itemize}[leftmargin=*]
+    \item Selección y justificación de la solución NoSQL
+    \item Diseño del modelo de datos
+    \item Definición del esquema de base de datos
+    \item Plan de implementación detallado
+\end{itemize}
+
+\newpage
+\section{Selección de Tecnología NoSQL}
+
+\subsection{Tecnología Seleccionada: MongoDB}
+
+Se ha seleccionado \textbf{MongoDB} como la solución NoSQL para este proyecto por las siguientes razones técnicas fundamentales:
+
+\subsubsection{Justificación Técnica}
+
+\paragraph{1. Soporte Geoespacial Nativo}
+\begin{itemize}[leftmargin=*]
+    \item MongoDB proporciona soporte completo para datos geoespaciales mediante el estándar \textbf{GeoJSON}
+    \item Implementa índices espaciales \texttt{2dsphere} que permiten consultas geométricas eficientes en superficies esféricas (crucial para coordenadas geográficas)
+    \item Operadores espaciales nativos: \texttt{\$geoWithin}, \texttt{\$geoIntersects}, \texttt{\$near}, fundamentales para determinar edificios dentro de límites municipales
+\end{itemize}
+
+\paragraph{2. Escalabilidad Horizontal}
+\begin{itemize}[leftmargin=*]
+    \item Arquitectura de \textbf{sharding} automático que permite distribuir billones de documentos en múltiples nodos
+    \item Capacidad de manejar los datasets masivos del proyecto (999M + 1.8B edificios)
+    \item Replicación nativa para alta disponibilidad y tolerancia a fallos
+\end{itemize}
+
+\paragraph{3. Flexibilidad del Modelo de Documentos}
+\begin{itemize}[leftmargin=*]
+    \item Esquema flexible que permite almacenar estructuras heterogéneas de Microsoft y Google
+    \item Facilita la comparación de datasets con atributos diferentes
+    \item Soporte para documentos embebidos y arrays, ideal para geometrías complejas
+\end{itemize}
+
+\paragraph{4. Rendimiento en Consultas Agregadas}
+\begin{itemize}[leftmargin=*]
+    \item Framework de agregación (\texttt{aggregate pipeline}) optimizado para cálculos estadísticos complejos
+    \item Capacidad de realizar agrupaciones por municipio y cálculos de área en tiempo eficiente
+    \item Índices compuestos para optimizar consultas por ubicación y atributos
+\end{itemize}
+
+\paragraph{5. Ecosistema y Herramientas}
+\begin{itemize}[leftmargin=*]
+    \item Excelente integración con Python (PyMongo, Motor) para análisis de datos
+    \item MongoDB Atlas para gestión en la nube (si se requiere)
+    \item MongoDB Compass para visualización y exploración de datos
+    \item Soporte para MongoDB Charts para visualizaciones geoespaciales
+\end{itemize}
+
+\subsection{Comparación con Alternativas}
+
+\begin{table}[h]
+\centering
+\caption{Comparación de Soluciones NoSQL}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Característica} & \textbf{MongoDB} & \textbf{Cassandra} & \textbf{Neo4j} \\ \midrule
+Soporte Geoespacial & Excelente & Limitado & Básico \\
+Escalabilidad & Excelente & Excelente & Buena \\
+Consultas Espaciales & Nativas & Requiere plugins & Limitadas \\
+Modelo de Datos & Documentos & Columnar & Grafos \\
+Curva de Aprendizaje & Baja & Alta & Media \\
+Integración Python & Excelente & Buena & Buena \\
+\textbf{Idoneidad Proyecto} & \textbf{95\%} & \textbf{60\%} & \textbf{40\%} \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+\section{Arquitectura del Sistema}
+
+\subsection{Arquitectura General}
+
+El sistema se estructura en cuatro capas principales:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Capa de Almacenamiento (Storage Layer)}
+    \begin{itemize}
+        \item MongoDB Database Server
+        \item Colecciones: \texttt{municipalities}, \texttt{buildings\_microsoft}, \texttt{buildings\_google}
+        \item Índices espaciales y de búsqueda
+    \end{itemize}
+    
+    \item \textbf{Capa de Ingesta de Datos (Data Ingestion Layer)}
+    \begin{itemize}
+        \item Scripts Python para descarga de datasets
+        \item Procesamiento ETL (Extract, Transform, Load)
+        \item Validación de geometrías GeoJSON
+        \item Carga masiva mediante \texttt{bulk\_write}
+    \end{itemize}
+    
+    \item \textbf{Capa de Procesamiento (Processing Layer)}
+    \begin{itemize}
+        \item Motor de consultas espaciales
+        \item Agregaciones por municipio
+        \item Cálculo de áreas y conteos
+        \item Comparación entre datasets
+    \end{itemize}
+    
+    \item \textbf{Capa de Presentación (Presentation Layer)}
+    \begin{itemize}
+        \item Scripts de análisis en Python (Pandas, GeoPandas)
+        \item Generación de reportes
+        \item Visualizaciones (Matplotlib, Folium)
+        \item Exportación de resultados
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Componentes Tecnológicos}
+
+\begin{table}[h]
+\centering
+\caption{Stack Tecnológico}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Componente} & \textbf{Tecnología} \\ \midrule
+Base de Datos & MongoDB 7.0+ \\
+Driver de Conexión & PyMongo 4.5+ \\
+Procesamiento Geoespacial & GeoPandas 0.14+, Shapely 2.0+ \\
+Análisis de Datos & Pandas 2.0+, NumPy 1.24+ \\
+Visualización & Matplotlib, Folium, Plotly \\
+Lenguaje Principal & Python 3.11+ \\
+Gestión de Entorno & Conda / Poetry \\
+Control de Versiones & Git / GitHub \\
+Documentación & Jupyter Notebooks, LaTeX \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Diagrama de Arquitectura}
+
+La arquitectura sigue un patrón de procesamiento por lotes (batch processing) donde:
+
+\begin{verbatim}
+Fuentes de Datos (Microsoft, Google, DANE)
+            |
+            v
+    ETL Pipeline (Python)
+            |
+            v
+    MongoDB Database
+    - municipalities
+    - buildings_microsoft
+    - buildings_google
+            |
+            v
+    Spatial Queries & Aggregations
+            |
+            v
+    Analysis & Reporting
+\end{verbatim}
+
+\newpage
+\section{Modelo de Datos NoSQL}
+
+\subsection{Paradigma de Modelado}
+
+El diseño del modelo de datos sigue los principios de modelado NoSQL orientado a documentos:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Desnormalización estratégica}: Los datos geométricos se embeben en los documentos para reducir joins
+    \item \textbf{Índices especializados}: Uso de índices 2dsphere para consultas espaciales
+    \item \textbf{Colecciones separadas por fuente}: Permite comparaciones directas entre datasets
+    \item \textbf{Metadatos en cada documento}: Trazabilidad y auditoría de origen de datos
+\end{itemize}
+
+\subsection{Entidades Principales}
+
+\subsubsection{1. Municipios PDET}
+
+Almacena los límites administrativos de los municipios designados como territorios PDET según el Marco Geoestadístico Nacional (MGN) del DANE.
+
+\textbf{Atributos clave:}
+\begin{itemize}
+    \item Código DANE (identificador único)
+    \item Nombre del municipio y departamento
+    \item Geometría del límite municipal (Polygon/MultiPolygon)
+    \item Indicador PDET
+    \item Metadatos administrativos
+\end{itemize}
+
+\subsubsection{2. Edificios Microsoft}
+
+Detecciones de edificios del dataset Microsoft Building Footprints.
+
+\textbf{Atributos clave:}
+\begin{itemize}
+    \item Geometría del footprint (Polygon)
+    \item Código del municipio al que pertenece
+    \item Área calculada en m²
+    \item Fuente y fecha de captura
+    \item Nivel de confianza (si disponible)
+\end{itemize}
+
+\subsubsection{3. Edificios Google}
+
+Detecciones de edificios del dataset Google Open Buildings.
+
+\textbf{Atributos clave:}
+\begin{itemize}
+    \item Geometría del footprint (Polygon)
+    \item Código del municipio al que pertenece
+    \item Área calculada en m²
+    \item Confianza del modelo (confidence score)
+    \item Versión del dataset
+\end{itemize}
+
+\subsection{Relaciones entre Entidades}
+
+En un modelo NoSQL orientado a documentos, las relaciones se manejan mediante:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Referencia}: Los edificios referencian municipios mediante \texttt{municipality\_code}
+    \item \textbf{Índices espaciales}: Permiten consultas de contención (edificios dentro de municipios)
+    \item \textbf{No hay joins tradicionales}: Se usan agregaciones con \texttt{\$lookup} cuando es necesario
+\end{itemize}
+
+\textbf{Relación conceptual:}
+\begin{verbatim}
+Municipality (1) ----< (N) Building Microsoft
+Municipality (1) ----< (N) Building Google
+\end{verbatim}
+
+\newpage
+\section{Diseño del Esquema MongoDB}
+
+\subsection{Colección: municipalities}
+
+\begin{lstlisting}[language=json,basicstyle=\small\ttfamily,breaklines=true]
+{
+  "_id": ObjectId("..."),
+  "codigo_dane": "05001",
+  "nombre_municipio": "Medellin",
+  "nombre_departamento": "Antioquia",
+  "is_pdet": true,
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-75.6068, 6.2442],
+        [-75.6000, 6.2500],
+        ...
+      ]
+    ]
+  },
+  "area_km2": 105.2,
+  "metadata": {
+    "source": "DANE-MGN",
+    "version": "2.0",
+    "load_date": ISODate("2025-10-27T00:00:00Z")
+  }
+}
+\end{lstlisting}
+
+\textbf{Índices:}
+\begin{verbatim}
+- codigo_dane: unique index
+- geometry: 2dsphere spatial index
+- is_pdet: regular index (filtrado)
+\end{verbatim}
+
+\subsection{Colección: buildings\_microsoft}
+
+\begin{lstlisting}[language=json,basicstyle=\small\ttfamily,breaklines=true]
+{
+  "_id": ObjectId("..."),
+  "municipality_code": "05001",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-75.6050, 6.2450],
+        [-75.6048, 6.2450],
+        [-75.6048, 6.2448],
+        [-75.6050, 6.2448],
+        [-75.6050, 6.2450]
+      ]
+    ]
+  },
+  "properties": {
+    "area_m2": 156.8,
+    "confidence": 0.95,
+    "height_estimated": null
+  },
+  "metadata": {
+    "source": "Microsoft",
+    "capture_date_range": "2014-2021",
+    "load_date": ISODate("2025-11-03T00:00:00Z"),
+    "version": "v1.0"
+  }
+}
+\end{lstlisting}
+
+\textbf{Índices:}
+\begin{verbatim}
+- geometry: 2dsphere spatial index
+- municipality_code: regular index
+- compound: {municipality_code: 1, "properties.area_m2": 1}
+\end{verbatim}
+
+\subsection{Colección: buildings\_google}
+
+\begin{lstlisting}[language=json,basicstyle=\small\ttfamily,breaklines=true]
+{
+  "_id": ObjectId("..."),
+  "municipality_code": "05001",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-75.6052, 6.2451],
+        [-75.6050, 6.2451],
+        [-75.6050, 6.2449],
+        [-75.6052, 6.2449],
+        [-75.6052, 6.2451]
+      ]
+    ]
+  },
+  "properties": {
+    "area_m2": 148.3,
+    "confidence": 0.87,
+    "full_plus_code": "67Q6+6RW Medellin"
+  },
+  "metadata": {
+    "source": "Google",
+    "dataset_version": "v3",
+    "region": "Latin America",
+    "load_date": ISODate("2025-11-03T00:00:00Z")
+  }
+}
+\end{lstlisting}
+
+\textbf{Índices:}
+\begin{verbatim}
+- geometry: 2dsphere spatial index
+- municipality_code: regular index
+- compound: {municipality_code: 1, "properties.area_m2": 1}
+\end{verbatim}
+
+\subsection{Estrategia de Índices}
+
+\subsubsection{Índices Espaciales (2dsphere)}
+
+Los índices 2dsphere son fundamentales para:
+\begin{itemize}
+    \item Consultas \texttt{\$geoWithin}: Encontrar edificios dentro de límites municipales
+    \item Consultas \texttt{\$geoIntersects}: Detectar intersecciones entre geometrías
+    \item Consultas \texttt{\$near}: Búsquedas por proximidad (si se requieren)
+\end{itemize}
+
+\subsubsection{Índices Compuestos}
+
+Permiten optimizar consultas que filtran por municipio y ordenan/filtran por área:
+\begin{verbatim}
+db.buildings_microsoft.createIndex(
+  { municipality_code: 1, "properties.area_m2": -1 }
+)
+\end{verbatim}
+
+\subsubsection{Consideraciones de Sharding}
+
+Para datasets masivos, el sharding se configurará con:
+\begin{itemize}
+    \item \textbf{Shard Key}: \texttt{municipality\_code} (distribución equitativa por municipio)
+    \item \textbf{Alternativa}: Hash de \texttt{\_id} para distribución uniforme
+\end{itemize}
+
+\newpage
+\section{Operaciones Espaciales Clave}
+
+\subsection{Asignación de Edificios a Municipios}
+
+Consulta espacial para determinar a qué municipio pertenece un edificio:
+
+\begin{lstlisting}[language=Python,basicstyle=\small\ttfamily,breaklines=true]
+# Pseudocodigo
+for building in buildings_collection:
+    municipality = municipalities.find_one({
+        "geometry": {
+            "$geoIntersects": {
+                "$geometry": building.geometry
+            }
+        }
+    })
+    building.municipality_code = municipality.codigo_dane
+    building.save()
+\end{lstlisting}
+
+\subsection{Agregación por Municipio}
+
+Pipeline de agregación para calcular totales por municipio:
+
+\begin{lstlisting}[language=Python,basicstyle=\small\ttfamily,breaklines=true]
+pipeline = [
+    {
+        "$match": {
+            "municipality_code": {"$exists": True}
+        }
+    },
+    {
+        "$group": {
+            "_id": "$municipality_code",
+            "total_buildings": {"$sum": 1},
+            "total_area_m2": {"$sum": "$properties.area_m2"},
+            "avg_area_m2": {"$avg": "$properties.area_m2"}
+        }
+    },
+    {
+        "$sort": {"total_area_m2": -1}
+    }
+]
+
+results = db.buildings_microsoft.aggregate(pipeline)
+\end{lstlisting}
+
+\subsection{Comparación entre Datasets}
+
+Unión de resultados de Microsoft y Google para comparación:
+
+\begin{lstlisting}[language=Python,basicstyle=\small\ttfamily,breaklines=true]
+# Agregacion para Microsoft
+ms_results = db.buildings_microsoft.aggregate([...])
+
+# Agregacion para Google
+google_results = db.buildings_google.aggregate([...])
+
+# Comparacion en Python/Pandas
+comparison_df = pd.merge(
+    ms_results_df, 
+    google_results_df, 
+    on='municipality_code',
+    suffixes=('_ms', '_google')
+)
+\end{lstlisting}
+
+\newpage
+\section{Plan de Implementación Detallado}
+
+\subsection{Cronograma de Entregas}
+
+\begin{longtable}{@{}p{0.15\textwidth}p{0.35\textwidth}p{0.40\textwidth}@{}}
+\toprule
+\textbf{Fecha} & \textbf{Entrega} & \textbf{Actividades Principales} \\ \midrule
+\endhead
+
+27 Oct & Entrega 1: Diseño de Esquema & 
+- Documento LaTeX del plan \\
+& & - Diagramas PlantUML \\
+& & - Definición de esquemas JSON \\
+& & - README actualizado \\ \midrule
+
+28 Oct - 2 Nov & Implementación MongoDB & 
+- Instalación y configuración de MongoDB \\
+& & - Creación de base de datos y colecciones \\
+& & - Implementación de índices \\
+& & - Scripts de validación \\ \midrule
+
+3 Nov & Entrega 2: Integración PDET & 
+- Descarga de datos DANE/MGN \\
+& & - Procesamiento de geometrías \\
+& & - Carga a MongoDB \\
+& & - Validación espacial \\
+& & - Documentación del proceso \\ \midrule
+
+4-9 Nov & Preparación Datasets Edificios & 
+- Análisis de formatos Microsoft/Google \\
+& & - Scripts de ETL \\
+& & - Pruebas de carga masiva \\
+& & - Optimización de rendimiento \\ \midrule
+
+10 Nov & Entrega 3: Carga de Edificios & 
+- Carga completa datasets \\
+& & - Índices espaciales \\
+& & - EDA inicial \\
+& & - Reporte de auditoría \\ \midrule
+
+11-16 Nov & Análisis Espacial & 
+- Asignación municipio-edificio \\
+& & - Agregaciones por territorio \\
+& & - Cálculos de área \\
+& & - Comparación datasets \\ \midrule
+
+17 Nov & Entrega 4: Workflow Geoespacial & 
+- Scripts reproducibles \\
+& & - Resultados tabulares \\
+& & - Mapas y visualizaciones \\
+& & - Documentación metodológica \\ \midrule
+
+18-23 Nov & Reporte Final & 
+- Redacción del informe técnico \\
+& & - Análisis de resultados \\
+& & - Recomendaciones UPME \\
+& & - Visualizaciones finales \\ \midrule
+
+24 Nov & Entrega 5: Reporte Final & 
+- Documento completo \\
+& & - Presentación de defensa \\
+& & - Repositorio GitHub completo \\ \bottomrule
+\end{longtable}
+
+\subsection{Fases de Implementación}
+
+\subsubsection{Fase 1: Configuración del Entorno (27-28 Oct)}
+
+\begin{enumerate}
+    \item Instalación de MongoDB Community Edition
+    \item Configuración de Python environment (conda/venv)
+    \item Instalación de dependencias: PyMongo, GeoPandas, Shapely, etc.
+    \item Configuración de conexión a MongoDB
+    \item Pruebas de conectividad
+\end{enumerate}
+
+\subsubsection{Fase 2: Carga de Municipios PDET (29 Oct - 3 Nov)}
+
+\begin{enumerate}
+    \item Descarga del MGN desde portal DANE
+    \item Filtrado de municipios PDET
+    \item Conversión de geometrías a GeoJSON
+    \item Validación de geometrías (topología)
+    \item Carga a colección \texttt{municipalities}
+    \item Creación de índices espaciales
+    \item Verificación de datos
+\end{enumerate}
+
+\subsubsection{Fase 3: Integración de Edificios (4-10 Nov)}
+
+\begin{enumerate}
+    \item Descarga de datasets (Microsoft y Google)
+    \item Procesamiento ETL por lotes
+    \item Asignación espacial a municipios
+    \item Carga masiva con \texttt{bulk\_write}
+    \item Creación de índices
+    \item Análisis exploratorio de datos
+    \item Documentación de anomalías
+\end{enumerate}
+
+\subsubsection{Fase 4: Análisis Espacial (11-17 Nov)}
+
+\begin{enumerate}
+    \item Desarrollo de pipelines de agregación
+    \item Cálculo de métricas por municipio
+    \item Comparación Microsoft vs Google
+    \item Generación de tablas de resultados
+    \item Creación de mapas interactivos
+    \item Validación de resultados
+\end{enumerate}
+
+\subsubsection{Fase 5: Reporte y Documentación (18-24 Nov)}
+
+\begin{enumerate}
+    \item Redacción de metodología
+    \item Análisis de resultados
+    \item Generación de visualizaciones finales
+    \item Recomendaciones para UPME
+    \item Revisión y correcciones
+    \item Preparación de presentación
+\end{enumerate}
+
+\newpage
+\section{Consideraciones de Escalabilidad}
+
+\subsection{Gestión de Volumen de Datos}
+
+\subsubsection{Estimación de Tamaño}
+
+\begin{table}[h]
+\centering
+\caption{Estimación de Almacenamiento}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Colección} & \textbf{Documentos} & \textbf{Tamaño/Doc} & \textbf{Total} \\ \midrule
+municipalities & 170 & 5 KB & 850 KB \\
+buildings\_microsoft & 999M & 500 B & 500 GB \\
+buildings\_google & 1.8B & 500 B & 900 GB \\
+\textbf{Total estimado} &  &  & \textbf{1.4 TB} \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Estrategias de Optimización}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Compresión}: MongoDB utiliza compresión Snappy/Zstd por defecto
+    \item \textbf{Proyecciones}: Cargar solo campos necesarios en consultas
+    \item \textbf{Índices selectivos}: Índices parciales solo para municipios PDET
+    \item \textbf{Carga incremental}: Procesar datasets en batches de 10,000-100,000 documentos
+    \item \textbf{Sharding}: Distribuir colecciones grandes en múltiples shards
+\end{itemize}
+
+\subsection{Optimización de Consultas}
+
+\begin{itemize}[leftmargin=*]
+    \item Uso de \texttt{explain()} para analizar planes de ejecución
+    \item Índices cubrientes (covering indexes) cuando sea posible
+    \item Agregaciones con \texttt{\$match} temprano en el pipeline
+    \item Límite de resultados con \texttt{\$limit} cuando sea apropiado
+    \item Uso de \texttt{allowDiskUse: true} para agregaciones grandes
+\end{itemize}
+
+\subsection{Monitoreo y Rendimiento}
+
+\begin{itemize}[leftmargin=*]
+    \item MongoDB Compass para monitoreo visual
+    \item Métricas de \texttt{serverStatus} y \texttt{dbStats}
+    \item Logs de queries lentas (slow query log)
+    \item Profiler de MongoDB para análisis detallado
+\end{itemize}
+
+\newpage
+\section{Validación del Esquema}
+
+\subsection{JSON Schema Validation}
+
+MongoDB permite definir reglas de validación para garantizar la integridad de los datos:
+
+\begin{lstlisting}[language=json,basicstyle=\tiny\ttfamily,breaklines=true]
+db.createCollection("municipalities", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["codigo_dane", "nombre_municipio", 
+                 "geometry", "is_pdet"],
+      properties: {
+        codigo_dane: {
+          bsonType: "string",
+          pattern: "^[0-9]{5}$",
+          description: "Codigo DANE de 5 digitos"
+        },
+        geometry: {
+          bsonType: "object",
+          required: ["type", "coordinates"],
+          properties: {
+            type: {
+              enum: ["Polygon", "MultiPolygon"]
+            }
+          }
+        },
+        is_pdet: {
+          bsonType: "bool"
+        }
+      }
+    }
+  }
+})
+\end{lstlisting}
+
+\subsection{Validación de Geometrías}
+
+\begin{itemize}[leftmargin=*]
+    \item Verificación de formato GeoJSON válido
+    \item Validación de topología (no auto-intersecciones)
+    \item Verificación de coordenadas dentro de rangos válidos para Colombia
+    \item Uso de Shapely para validación: \texttt{is\_valid}, \texttt{is\_simple}
+\end{itemize}
+
+\newpage
+\section{Gestión de Riesgos}
+
+\begin{longtable}{@{}p{0.25\textwidth}p{0.35\textwidth}p{0.30\textwidth}@{}}
+\toprule
+\textbf{Riesgo} & \textbf{Impacto} & \textbf{Mitigación} \\ \midrule
+\endhead
+
+Tamaño excesivo de datasets & Problemas de almacenamiento y rendimiento & 
+- Filtrar solo municipios PDET \\
+& & - Sharding de colecciones \\
+& & - Usar servidor con capacidad adecuada \\ \midrule
+
+Geometrías inválidas & Errores en consultas espaciales & 
+- Validación con Shapely \\
+& & - Limpieza con buffer(0) \\
+& & - Logging de problemas \\ \midrule
+
+Baja calidad de datos & Resultados inexactos & 
+- EDA exhaustivo \\
+& & - Comparación entre datasets \\
+& & - Documentar limitaciones \\ \midrule
+
+Tiempos de carga excesivos & Retraso en entregas & 
+- Carga en paralelo \\
+& & - Bulk operations \\
+& & - Procesamiento incremental \\ \midrule
+
+Incompatibilidad de formatos & Problemas en integración & 
+- Estandarización a GeoJSON \\
+& & - Scripts de transformación robustos \\
+& & - Pruebas tempranas \\ \bottomrule
+\end{longtable}
+
+\section{Conclusiones}
+
+Este plan de implementación establece una base sólida para el desarrollo del proyecto de análisis geoespacial de potencial solar en territorios PDET. La selección de MongoDB como solución NoSQL se justifica por su:
+
+\begin{itemize}[leftmargin=*]
+    \item Soporte geoespacial nativo y robusto
+    \item Capacidad de escalar a billones de documentos
+    \item Flexibilidad para comparar datasets heterogéneos
+    \item Ecosistema maduro de herramientas
+\end{itemize}
+
+El diseño del esquema propuesto optimiza el almacenamiento y consulta de datos geoespaciales masivos, mientras que el plan de implementación detallado proporciona una ruta clara hacia la entrega exitosa del proyecto.
+
+Las siguientes entregas construirán sobre esta fundación, implementando progresivamente la carga de datos, análisis espacial y generación de reportes que culminarán en recomendaciones accionables para la UPME.
+
+\section{Referencias}
+
+\begin{enumerate}[leftmargin=*]
+    \item MongoDB Documentation. \textit{Geospatial Queries}. \url{https://docs.mongodb.com/manual/geospatial-queries/}
+    \item Microsoft Building Footprints. \textit{Planetary Computer}. \url{https://planetarycomputer.microsoft.com/dataset/ms-buildings}
+    \item Google Open Buildings. \textit{Research Dataset}. \url{https://sites.research.google/gr/open-buildings/}
+    \item DANE. \textit{Marco Geoestadístico Nacional}. \url{https://geoportal.dane.gov.co/}
+    \item MongoDB, Inc. \textit{Data Modeling Introduction}. \url{https://docs.mongodb.com/manual/core/data-modeling-introduction/}
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,206 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MongoDB Collection Schema: municipalities",
+  "description": "Schema for PDET municipalities collection with geospatial data from DANE MGN",
+  "bsonType": "object",
+  "required": [
+    "codigo_dane",
+    "nombre_municipio",
+    "nombre_departamento",
+    "is_pdet",
+    "geometry",
+    "metadata"
+  ],
+  "properties": {
+    "_id": {
+      "bsonType": "objectId",
+      "description": "MongoDB auto-generated unique identifier"
+    },
+    "codigo_dane": {
+      "bsonType": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "5-digit DANE municipal code (unique identifier)"
+    },
+    "nombre_municipio": {
+      "bsonType": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Name of the municipality"
+    },
+    "nombre_departamento": {
+      "bsonType": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Name of the department (state)"
+    },
+    "is_pdet": {
+      "bsonType": "bool",
+      "description": "Flag indicating if municipality is a PDET territory"
+    },
+    "geometry": {
+      "bsonType": "object",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon",
+            "MultiPolygon"
+          ],
+          "description": "GeoJSON geometry type"
+        },
+        "coordinates": {
+          "bsonType": "array",
+          "description": "GeoJSON coordinates array (format depends on type)"
+        }
+      },
+      "description": "GeoJSON geometry representing municipal boundaries"
+    },
+    "area_km2": {
+      "bsonType": "double",
+      "minimum": 0,
+      "description": "Area of the municipality in square kilometers"
+    },
+    "poblacion": {
+      "bsonType": "int",
+      "minimum": 0,
+      "description": "Population of the municipality (optional)"
+    },
+    "centroid": {
+      "bsonType": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "Point"
+          ]
+        },
+        "coordinates": {
+          "bsonType": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "bsonType": "double"
+          }
+        }
+      },
+      "description": "Centroid point of the municipality (optional)"
+    },
+    "metadata": {
+      "bsonType": "object",
+      "required": [
+        "source",
+        "load_date"
+      ],
+      "properties": {
+        "source": {
+          "bsonType": "string",
+          "enum": [
+            "DANE-MGN"
+          ],
+          "description": "Data source identifier"
+        },
+        "version": {
+          "bsonType": "string",
+          "description": "Version of the MGN dataset"
+        },
+        "load_date": {
+          "bsonType": "date",
+          "description": "Timestamp when data was loaded into MongoDB"
+        },
+        "last_updated": {
+          "bsonType": "date",
+          "description": "Last update timestamp from source"
+        }
+      },
+      "description": "Metadata about data source and loading"
+    }
+  },
+  "indexes": [
+    {
+      "name": "codigo_dane_unique",
+      "keys": {
+        "codigo_dane": 1
+      },
+      "unique": true,
+      "description": "Unique index on DANE code"
+    },
+    {
+      "name": "geometry_2dsphere",
+      "keys": {
+        "geometry": "2dsphere"
+      },
+      "description": "Geospatial index for spatial queries"
+    },
+    {
+      "name": "is_pdet_index",
+      "keys": {
+        "is_pdet": 1
+      },
+      "description": "Index to quickly filter PDET municipalities"
+    },
+    {
+      "name": "nombre_municipio_text",
+      "keys": {
+        "nombre_municipio": 1
+      },
+      "description": "Index for searching by municipality name"
+    }
+  ],
+  "example": {
+    "_id": {
+      "$oid": "6713a8b4f1c2d3e4a5b6c7d8"
+    },
+    "codigo_dane": "05001",
+    "nombre_municipio": "Medellín",
+    "nombre_departamento": "Antioquia",
+    "is_pdet": true,
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -75.6068,
+            6.2442
+          ],
+          [
+            -75.6000,
+            6.2500
+          ],
+          [
+            -75.5932,
+            6.2442
+          ],
+          [
+            -75.6000,
+            6.2384
+          ],
+          [
+            -75.6068,
+            6.2442
+          ]
+        ]
+      ]
+    },
+    "area_km2": 105.2,
+    "poblacion": 2508452,
+    "centroid": {
+      "type": "Point",
+      "coordinates": [
+        -75.6000,
+        6.2442
+      ]
+    },
+    "metadata": {
+      "source": "DANE-MGN",
+      "version": "2.0",
+      "load_date": {
+        "$date": "2025-10-27T12:00:00.000Z"
+      },
+      "last_updated": {
+        "$date": "2024-12-01T00:00:00.000Z"
+      }
+    }
+  }
+}

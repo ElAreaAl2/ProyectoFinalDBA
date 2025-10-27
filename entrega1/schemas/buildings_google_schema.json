@@ -1,0 +1,232 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MongoDB Collection Schema: buildings_google",
+  "description": "Schema for Google Open Buildings dataset (v3)",
+  "bsonType": "object",
+  "required": [
+    "municipality_code",
+    "geometry",
+    "properties",
+    "metadata"
+  ],
+  "properties": {
+    "_id": {
+      "bsonType": "objectId",
+      "description": "MongoDB auto-generated unique identifier"
+    },
+    "municipality_code": {
+      "bsonType": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "Reference to municipalities.codigo_dane (foreign key)"
+    },
+    "geometry": {
+      "bsonType": "object",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Polygon"
+          ],
+          "description": "GeoJSON geometry type (buildings are polygons)"
+        },
+        "coordinates": {
+          "bsonType": "array",
+          "description": "GeoJSON coordinates representing building footprint"
+        }
+      },
+      "description": "GeoJSON geometry of the building footprint"
+    },
+    "properties": {
+      "bsonType": "object",
+      "required": [
+        "area_m2",
+        "confidence"
+      ],
+      "properties": {
+        "area_m2": {
+          "bsonType": "double",
+          "minimum": 0,
+          "description": "Area of the building footprint in square meters"
+        },
+        "confidence": {
+          "bsonType": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence score from ML model (0-1)"
+        },
+        "full_plus_code": {
+          "bsonType": "string",
+          "description": "Open Location Code (Plus Code) for the building"
+        },
+        "latitude": {
+          "bsonType": "double",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude of building centroid"
+        },
+        "longitude": {
+          "bsonType": "double",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude of building centroid"
+        },
+        "latitude_longitude_source": {
+          "bsonType": "string",
+          "enum": [
+            "centroid",
+            "point_on_surface"
+          ],
+          "description": "Method used to determine lat/lon"
+        }
+      },
+      "description": "Properties of the building from Google dataset"
+    },
+    "metadata": {
+      "bsonType": "object",
+      "required": [
+        "source",
+        "load_date",
+        "dataset_version"
+      ],
+      "properties": {
+        "source": {
+          "bsonType": "string",
+          "enum": [
+            "Google"
+          ],
+          "description": "Data source identifier"
+        },
+        "dataset_version": {
+          "bsonType": "string",
+          "pattern": "^v[0-9]+$",
+          "description": "Version of Google Open Buildings dataset (e.g., 'v3')"
+        },
+        "region": {
+          "bsonType": "string",
+          "enum": [
+            "Latin America",
+            "Caribbean"
+          ],
+          "description": "Regional subset of the dataset"
+        },
+        "country_code": {
+          "bsonType": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2 country code (CO for Colombia)"
+        },
+        "load_date": {
+          "bsonType": "date",
+          "description": "Timestamp when data was loaded into MongoDB"
+        },
+        "batch_id": {
+          "bsonType": "string",
+          "description": "Identifier of the loading batch"
+        },
+        "tile_id": {
+          "bsonType": "string",
+          "description": "Geographic tile identifier from Google dataset"
+        }
+      },
+      "description": "Metadata about data source and loading process"
+    }
+  },
+  "indexes": [
+    {
+      "name": "geometry_2dsphere",
+      "keys": {
+        "geometry": "2dsphere"
+      },
+      "description": "Geospatial index for spatial queries ($geoWithin, $geoIntersects)"
+    },
+    {
+      "name": "municipality_code_index",
+      "keys": {
+        "municipality_code": 1
+      },
+      "description": "Index for filtering buildings by municipality"
+    },
+    {
+      "name": "municipality_area_compound",
+      "keys": {
+        "municipality_code": 1,
+        "properties.area_m2": -1
+      },
+      "description": "Compound index for municipality queries sorted by area"
+    },
+    {
+      "name": "confidence_index",
+      "keys": {
+        "properties.confidence": -1
+      },
+      "description": "Index for filtering by confidence score"
+    },
+    {
+      "name": "area_index",
+      "keys": {
+        "properties.area_m2": -1
+      },
+      "description": "Index for sorting/filtering by building area"
+    }
+  ],
+  "sharding": {
+    "shard_key": {
+      "municipality_code": 1
+    },
+    "description": "Shard by municipality_code for distributed processing across PDET territories"
+  },
+  "example": {
+    "_id": {
+      "$oid": "6713a8b4f1c2d3e4a5b6c7da"
+    },
+    "municipality_code": "05001",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -75.6052,
+            6.2451
+          ],
+          [
+            -75.6050,
+            6.2451
+          ],
+          [
+            -75.6050,
+            6.2449
+          ],
+          [
+            -75.6052,
+            6.2449
+          ],
+          [
+            -75.6052,
+            6.2451
+          ]
+        ]
+      ]
+    },
+    "properties": {
+      "area_m2": 148.3,
+      "confidence": 0.87,
+      "full_plus_code": "67Q6+6RW Medellin, Antioquia",
+      "latitude": 6.2450,
+      "longitude": -75.6051,
+      "latitude_longitude_source": "centroid"
+    },
+    "metadata": {
+      "source": "Google",
+      "dataset_version": "v3",
+      "region": "Latin America",
+      "country_code": "CO",
+      "load_date": {
+        "$date": "2025-11-03T16:45:00.000Z"
+      },
+      "batch_id": "GOOGLE_BATCH_042",
+      "tile_id": "67Q6"
+    }
+  }
+}
