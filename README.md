@@ -171,10 +171,10 @@ ProyectoFinalDBA/
 │   ├── docs/
 │   │   └── implementation_plan.tex   # Plan de implementación (LaTeX)
 │   ├── diagrams/
-│   │   ├── architecture.puml         # Diagrama de arquitectura
-│   │   ├── data_model.puml           # Modelo de datos NoSQL
-│   │   ├── workflow.puml             # Flujo de procesamiento
-│   │   └── spatial_query.puml        # Secuencia de consultas espaciales
+│   │   ├── arquitectura del sistema.png         # Diagrama de arquitectura
+│   │   ├── Modelo de Datos NoSQL.png           # Modelo de datos NoSQL
+│   │   ├── Flujo de Trabajo - Procesamiento Geoespacial.png             # Flujo de procesamiento
+│   │   └── Diagrama Secuencia Consulta Espacial.png       # Secuencia de consultas espaciales
 │   └── schemas/
 │       ├── municipalities_schema.json
 │       ├── buildings_microsoft_schema.json
