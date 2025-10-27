@@ -213,29 +213,9 @@ ProyectoFinalDBA/
 
 ### Contenido Entregado
 
-#### 1. **Plan de Implementación** (`entrega1/docs/implementation_plan.tex`)
-Documento LaTeX completo que incluye:
-- Selección y justificación de MongoDB
-- Arquitectura del sistema
-- Stack tecnológico
-- Cronograma detallado de implementación
-- Gestión de riesgos
-- Consideraciones de escalabilidad
+#### 1. **Plan de Implementación** 
 
-**Para compilar en Overleaf:**
-1. Crear nuevo proyecto en [Overleaf](https://www.overleaf.com)
-2. Subir el archivo `implementation_plan.tex`
-3. Compilar (Compiler: pdfLaTeX)
-
-#### 2. **Diagramas PlantUML** (`entrega1/diagrams/`)
-- `architecture.puml`: Arquitectura del sistema completo
-- `data_model.puml`: Modelo de colecciones NoSQL
-- `workflow.puml`: Flujo de procesamiento de datos
-- `spatial_query.puml`: Secuencia de consultas espaciales
-
-**Para visualizar:**
-- Usar extensión PlantUML en VS Code
-- O usar [PlantUML Online Server](http://www.plantuml.com/plantuml/)
+#### 2. **Diagramas** 
 
 #### 3. **Esquemas JSON** (`entrega1/schemas/`)
 Definiciones completas de esquemas con:
@@ -292,7 +272,8 @@ python create_collections.py
 
 **Curso**: Administración de Bases de Datos  
 **Instructor**: Dr. Andrés Oswaldo Calderón Romero  
-**Institución**: Universidad de los Andes  
+**Grupo**: Santiago Mesa, Natalia Avila, Juan Diego Arias y Nicolas Camacho  
+**Institución**: Pontificia Universidad Javeriana Bogotá
 **Período**: Octubre - Noviembre 2025
 
 ---
