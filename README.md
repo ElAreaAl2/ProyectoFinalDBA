@@ -1,7 +1,7 @@
 # 🌞 Análisis Geoespacial de Potencial Solar en Territorios PDET
 
 **Proyecto Final - Administración de Bases de Datos**  
-Universidad de los Andes | Octubre - Noviembre 2025
+Pontificia Universidad Javeriana Bogotá | Octubre - Noviembre 2025
 
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0+-green.svg)](https://www.mongodb.com/)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
