@@ -1,94 +1,182 @@
-import os, json, math
+# entrega3/loaders/01_descargar_edificios_ms_desde_planetary_computer.py
 from pathlib import Path
 from tqdm import tqdm
 import geopandas as gpd
 import pandas as pd
-import pyogrio
-import shapely
-from shapely.geometry import shape
+import requests
 import pystac_client
 import planetary_computer
 
-# 1) Config
 OUT_DIR = Path("data/ms"); OUT_DIR.mkdir(parents=True, exist_ok=True)
-# BBOX Colombia aprox [minLon, minLat, maxLon, maxLat]
+# BBOX Colombia [minLon, minLat, maxLon, maxLat]
 BBOX_CO = [-79.1, -4.3, -66.8, 13.5]
+REQ_TIMEOUT = 120  # un poco más alto por si hay tiles pesados
 
-# 2) Buscar en STAC la colección de edificios
-catalog = pystac_client.Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
-search = catalog.search(collections=["ms-buildings"], bbox=BBOX_CO, limit=100)
+def _looks_like_colombia_text(s: str) -> bool:
+    """Heurística textual para 'Colombia' o Sudamérica."""
+    s = (s or "").lower()
+    return (
+        "colombia" in s or
+        "countryname=colombia" in s or
+        "regionname=southamerica" in s or
+        "south america" in s
+    )
 
-items = list(search.get_items())
-if not items:
-    raise SystemExit("No se encontraron items STAC para Colombia (ajusta BBOX o revisa conexión).")
+def _item_is_colombia(it) -> bool:
+    """Filtra ítems que parecen de Colombia (por id y por assets firmados)."""
+    if _looks_like_colombia_text(getattr(it, "id", "")):
+        return True
 
-print("Items STAC:", len(items))
+    # Firma el item para que sus assets tengan SAS donde aplique
+    try:
+        signed = planetary_computer.sign(it)
+    except Exception:
+        signed = it
 
-# 3) Descargar assets (normalmente Parquet o GeoJSON por tile)
-def download_asset(href, out_path):
-    import requests
-    with requests.get(href, stream=True, timeout=600) as r:
+    for a in signed.assets.values():
+        href = getattr(a, "href", "")
+        if isinstance(href, str) and _looks_like_colombia_text(href):
+            return True
+        # como último recurso, firmanos el asset puntual y revisemos
+        try:
+            sa = planetary_computer.sign(a)
+            sh = getattr(sa, "href", "")
+            if isinstance(sh, str) and _looks_like_colombia_text(sh):
+                return True
+        except Exception:
+            pass
+
+    return False
+
+def _download_https(url: str, out_path: Path):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(url, stream=True, timeout=REQ_TIMEOUT) as r:
         r.raise_for_status()
         with open(out_path, "wb") as f:
-            for chunk in r.iter_content(1<<20):
-                f.write(chunk)
+            for chunk in r.iter_content(1 << 20):
+                if chunk:
+                    f.write(chunk)
 
-parquets = []
+def pick_asset(item):
+    """Elige el mejor asset (parquet si existe, luego data, luego geojson)."""
+    for key in ("parquet", "data", "geojson"):
+        if key in item.assets:
+            return item.assets[key]
+    # fallback: cualquiera
+    return next(iter(item.assets.values()))
 
-for it in tqdm(items, desc="Descargando assets"):
-    signed = planetary_computer.sign(it)  # firma URLs
-    # intenta preferir parquet si existe; si no, usa geojson
-    assets = signed.assets
-    asset = None
-    for k in ("parquet", "data", "geojson"):  # nombres típicos
-        if k in assets:
-            asset = assets[k]
-            break
-    if not asset:
-        continue
-    url = asset.href
-    ext = ".parquet" if ".parquet" in url else ".geojson"
-    out = OUT_DIR / f"{it.id}{ext}"
-    if not out.exists():
-        download_asset(url, out)
-    if out.suffix == ".parquet":
-        parquets.append(out)
+def _signed_asset_url(asset) -> str | None:
+    """
+    Devuelve una URL HTTPS firmada (con SAS). Evita alternates sin SAS.
+    Si no se logra firmar o no trae 'sig=', retorna None.
+    """
+    try:
+        sa = planetary_computer.sign(asset)  # firmar el asset concreto
+        href = getattr(sa, "href", "")
+    except Exception:
+        href = getattr(asset, "href", "")
 
-# 4) Unificar a GeoParquet (si descargaste varios parquet) y filtrar por BBOX final
-union_pq = OUT_DIR / "ms_co_union.parquet"
-if parquets:
-    # leer por lotes y concatenar
-    parts = []
-    for p in parquets:
+    if not isinstance(href, str) or not href.startswith("https://"):
+        return None
+
+    # Debe verse 'sig=' (típico SAS). Si no, probablemente no está firmada.
+    if "sig=" not in href and "se=" not in href and "sv=" not in href:
+        return None
+    return href
+
+def main():
+    cat = pystac_client.Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
+
+    # Pedimos un lote grande y filtramos client-side por Colombia
+    search = cat.search(
+        collections=["ms-buildings"],
+        bbox=BBOX_CO,
+        max_items=800,  # puedes subir si quieres más cobertura
+        limit=200
+    )
+    items = list(search.items())
+    if not items:
+        raise SystemExit("No se encontraron items para la búsqueda. Revisa el BBOX.")
+
+    items_co = [it for it in items if _item_is_colombia(it)]
+    if not items_co:
+        raise SystemExit(
+            "No encontré ítems con referencias claras a Colombia. "
+            "Sube max_items o elimina bbox para explorar más."
+        )
+
+    print(f"Items STAC totales: {len(items)} | Colombia detectados: {len(items_co)}")
+
+    local_parts = []
+    for it in tqdm(items_co, desc="Descargando assets (Colombia)"):
+        # Firma el item y el asset elegido; usa SOLO la URL firmada con SAS.
+        signed_item = planetary_computer.sign(it)
+        asset = pick_asset(signed_item)
+
+        url = _signed_asset_url(asset)
+        if not url:
+            # como plan B, intenta firmar el asset del item original
+            try:
+                url = _signed_asset_url(pick_asset(it))
+            except Exception:
+                url = None
+
+        if not url:
+            print(f"[WARN] {it.id}: no encontré URL https firmada (SAS) utilizable (skip)")
+            continue
+
+        # Decide extensión por la URL final
+        ext = ".parquet" if ".parquet" in url else ".geojson"
+        out = OUT_DIR / f"{it.id}{ext}"
+        if out.exists():
+            local_parts.append(out)
+            continue
+
         try:
-            g = gpd.read_parquet(p)
-            # Normaliza a geometría válida
-            g = g.set_geometry(g.geometry.buffer(0))
-            parts.append(g)
+            _download_https(url, out)
+            local_parts.append(out)
         except Exception as e:
-            print("Error leyendo", p, e)
-    if parts:
-        g_all = pd.concat(parts, ignore_index=True)
-        # Mantén solo polígonos válidos
-        g_all = g_all[g_all.geometry.notna()]
-        g_all.to_parquet(union_pq, index=False)
-        print("Escribí", union_pq)
+            print(f"[WARN] {it.id}: no descargado → {e}")
 
-# 5) Exportar a GeoJSON recortado por BBOX (si prefieres)
-gj = OUT_DIR / "ms_co.geojson"
-if union_pq.exists():
-    g = gpd.read_parquet(union_pq)
-else:
-    # Si no hubo parquet, intenta coleccionar los geojson descargados
-    files = list(OUT_DIR.glob("*.geojson"))
-    if not files:
-        raise SystemExit("No se logró preparar ms_co.geojson")
-    g = pd.concat([gpd.read_file(fp) for fp in files], ignore_index=True)
+    # Unión a un solo archivo del país
+    union_gj = OUT_DIR / "ms_co.geojson"
+    union_pq = OUT_DIR / "ms_co_union.parquet"
 
-# Reproyecta a WGS84 por si acaso
-g = g.set_crs(4326, allow_override=True)
-# recorte suave por BBOX
-minx, miny, maxx, maxy = BBOX_CO
-g = g.cx[minx:maxx, miny:maxy]
-g.to_file(gj, driver="GeoJSON")
-print("OK GeoJSON:", gj)
+    parts_pq = [p for p in local_parts if p.suffix == ".parquet"]
+    if parts_pq:
+        frames = []
+        for p in parts_pq:
+            try:
+                g = gpd.read_parquet(p); frames.append(g)
+            except Exception as e:
+                print("Error leyendo parquet", p, e)
+        if frames:
+            g_all = pd.concat(frames, ignore_index=True)
+            g_all.to_parquet(union_pq, index=False)
+            g_all = g_all.set_crs(4326, allow_override=True)
+            minx, miny, maxx, maxy = BBOX_CO
+            g_all = g_all.cx[minx:maxx, miny:maxy]
+            g_all.to_file(union_gj, driver="GeoJSON")
+            print("OK GeoJSON:", union_gj)
+            return
+
+    parts_gj = [p for p in local_parts if p.suffix == ".geojson"]
+    if parts_gj:
+        frames = []
+        for p in parts_gj:
+            try:
+                frames.append(gpd.read_file(p))
+            except Exception as e:
+                print("Error leyendo geojson", p, e)
+        if frames:
+            g_all = pd.concat(frames, ignore_index=True).set_crs(4326, allow_override=True)
+            minx, miny, maxx, maxy = BBOX_CO
+            g_all = g_all.cx[minx:maxx, miny:maxy]
+            g_all.to_file(union_gj, driver="GeoJSON")
+            print("OK GeoJSON:", union_gj)
+            return
+
+    raise SystemExit("No fue posible generar ms_co.geojson")
+
+if __name__ == "__main__":
+    main()
