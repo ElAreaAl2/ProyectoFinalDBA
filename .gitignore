@@ -1,36 +1,3 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
-# LaTeX
-*.aux
-*.log
-*.out
-*.toc
-*.fdb_latexmk
-*.fls
-*.synctex.gz
-*.bbl
-*.blg
-*.lof
-*.lot
-
 # VS Code
 .vscode/
 *.code-workspace
@@ -41,37 +8,3 @@ Thumbs.db
 *.swp
 *.swo
 *~
-
-# Data files (large datasets)
-*.csv
-*.geojson
-*.shp
-*.shx
-*.dbf
-*.prj
-*.parquet
-*.gpkg
-
-# Exclude large data directories
-data/
-datasets/
-downloads/
-
-# MongoDB dumps
-dump/
-*.bson
-
-# Temporary files
-temp/
-tmp/
-*.tmp
-
-# Compiled outputs
-*.pdf
-!entrega*/docs/*.pdf  # Allow PDFs in documentation
-
-# PlantUML generated images (keep source .puml files)
-*.png
-*.svg
-!entrega*/diagrams/*.png  # Allow exported diagrams
-!entrega*/diagrams/*.svg
